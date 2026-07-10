@@ -332,3 +332,70 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #52525b;
 }
+
+/* Mobile Responsiveness */
+.mobile-back-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+.mobile-back-btn:hover {
+  color: var(--text-primary);
+}
+
+.mobile-only-header {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+  
+  .sidebar, .question-list-pane, .markdown-viewer-pane {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh;
+    border-right: none;
+    display: none;
+  }
+  
+  .mobile-view-sidebar .sidebar {
+    display: flex;
+  }
+  
+  .mobile-view-list .question-list-pane {
+    display: flex;
+  }
+  
+  .mobile-view-viewer .markdown-viewer-pane {
+    display: block;
+  }
+  
+  .mobile-back-btn {
+    display: flex;
+  }
+  
+  .mobile-only-header {
+    display: block;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(24, 24, 27, 0.8);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  
+  .markdown-container {
+    padding: 24px 20px;
+  }
+}

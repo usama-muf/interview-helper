@@ -1,8 +1,8 @@
 import React from 'react';
 import ReactMarkdown from 'react-markdown';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, ChevronLeft } from 'lucide-react';
 
-export default function MarkdownViewer({ question }) {
+export default function MarkdownViewer({ question, onBack }) {
   if (!question) {
     return (
       <div className="markdown-viewer-pane">
@@ -17,6 +17,11 @@ export default function MarkdownViewer({ question }) {
 
   return (
     <div className="markdown-viewer-pane">
+      <div className="pane-header mobile-only-header">
+        <button className="mobile-back-btn" onClick={onBack}>
+          <ChevronLeft size={20} /> Back to questions
+        </button>
+      </div>
       <div className="markdown-container">
         <div className="markdown-body">
           <h1>{question.title}</h1>

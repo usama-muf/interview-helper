@@ -1,7 +1,8 @@
 import React from 'react';
+import { ChevronLeft } from 'lucide-react';
 
-export default function QuestionList({ questions, selectedQuestion, onSelectQuestion, topic, subtopic }) {
-  if (!questions || questions.length === 0) {
+export default function QuestionList({ questions, selectedQuestion, onSelectQuestion, topic, subtopic, onBack }) {
+  if (!topic || !subtopic) {
     return (
       <div className="question-list-pane">
         <div className="pane-header">
@@ -11,9 +12,29 @@ export default function QuestionList({ questions, selectedQuestion, onSelectQues
     );
   }
 
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="question-list-pane">
+        <div className="pane-header">
+          <button className="mobile-back-btn" onClick={onBack}>
+            <ChevronLeft size={20} /> Back
+          </button>
+          <h2 className="pane-title">{subtopic}</h2>
+          <div className="pane-subtitle">{topic}</div>
+        </div>
+        <div className="question-cards" style={{ padding: '16px', color: '#a1a1aa' }}>
+          No questions found for this topic.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="question-list-pane">
       <div className="pane-header">
+        <button className="mobile-back-btn" onClick={onBack}>
+          <ChevronLeft size={20} /> Back
+        </button>
         <h2 className="pane-title">{subtopic}</h2>
         <div className="pane-subtitle">{topic}</div>
       </div>

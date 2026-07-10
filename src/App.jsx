@@ -14,14 +14,16 @@ function App() {
     const data = getAppStructure();
     setAppData(data);
     
-    // Auto-select first available topic/subtopic
-    const topics = Object.keys(data);
-    if (topics.length > 0) {
-      const firstTopic = topics[0];
-      const subtopics = Object.keys(data[firstTopic]);
-      if (subtopics.length > 0) {
-        setSelectedTopic(firstTopic);
-        setSelectedSubtopic(subtopics[0]);
+    // Auto-select first available topic/subtopic on desktop load
+    if (window.innerWidth > 768) {
+      const topics = Object.keys(data);
+      if (topics.length > 0) {
+        const firstTopic = topics[0];
+        const subtopics = Object.keys(data[firstTopic]);
+        if (subtopics.length > 0) {
+          setSelectedTopic(firstTopic);
+          setSelectedSubtopic(subtopics[0]);
+        }
       }
     }
   }, []);
@@ -29,15 +31,23 @@ function App() {
   const handleSelectSubtopic = (topic, subtopic) => {
     setSelectedTopic(topic);
     setSelectedSubtopic(subtopic);
-    setSelectedQuestion(null); // Reset selected question
+    setSelectedQuestion(null);
   };
 
   const currentQuestions = selectedTopic && selectedSubtopic 
     ? appData[selectedTopic][selectedSubtopic] 
     : [];
 
+  // Determine active view for mobile CSS classes
+  let activeMobileView = 'sidebar';
+  if (selectedQuestion) {
+    activeMobileView = 'viewer';
+  } else if (selectedTopic && selectedSubtopic) {
+    activeMobileView = 'list';
+  }
+
   return (
-    <div className="app-container">
+    <div className={`app-container mobile-view-${activeMobileView}`}>
       <Sidebar 
         data={appData} 
         selectedTopic={selectedTopic}
@@ -50,9 +60,11 @@ function App() {
         questions={currentQuestions}
         selectedQuestion={selectedQuestion}
         onSelectQuestion={setSelectedQuestion}
+        onBack={() => { setSelectedTopic(null); setSelectedSubtopic(null); }}
       />
       <MarkdownViewer 
         question={selectedQuestion} 
+        onBack={() => setSelectedQuestion(null)}
       />
     </div>
   );
