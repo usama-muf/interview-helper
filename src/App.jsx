@@ -9,6 +9,7 @@ function App() {
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [selectedSubtopic, setSelectedSubtopic] = useState(null);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
+  const [sidebarsCollapsed, setSidebarsCollapsed] = useState(false);
 
   useEffect(() => {
     const data = getAppStructure();
@@ -47,7 +48,7 @@ function App() {
   }
 
   return (
-    <div className={`app-container mobile-view-${activeMobileView}`}>
+    <div className={`app-container mobile-view-${activeMobileView} ${sidebarsCollapsed ? 'sidebars-collapsed' : ''}`}>
       <Sidebar 
         data={appData} 
         selectedTopic={selectedTopic}
@@ -65,6 +66,8 @@ function App() {
       <MarkdownViewer 
         question={selectedQuestion} 
         onBack={() => setSelectedQuestion(null)}
+        sidebarsCollapsed={sidebarsCollapsed}
+        onToggleSidebars={() => setSidebarsCollapsed(!sidebarsCollapsed)}
       />
     </div>
   );
