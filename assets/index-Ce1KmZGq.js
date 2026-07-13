@@ -466,5 +466,1343 @@ Should be able to explain:
   - Repeatable Read
   - Serializable
 - HikariCP Connection Pooling
-- CGLIB vs. JDK Dynamic Proxies`;function Uo(e){let t=/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*[\r\n]+([\s\S]*)$/.exec(e);if(t){let e=t[1],n=t[2].trim(),r={};return e.split(`
-`).forEach(e=>{let t=e.indexOf(`:`);if(t>-1){let n=e.slice(0,t).trim(),i=e.slice(t+1).trim();r[n]=i}}),{data:r,content:n}}return{data:{},content:e}}var Wo=Object.assign({"../data/Java/Collections/q1.md":zo,"../data/SpringBoot/AOP/q1.md":Bo,"../data/SpringBoot/Transactions/q1.md":Vo,"../data/SpringBoot/Transactions/q2.md":Ho});function Go(){let e={};for(let t in Wo){let n=t.replace(`../data/`,``).split(`/`);if(n.length>=3){let r=n[0],i=n[1],a=n[2],o=Wo[t],{data:s,content:c}=Uo(o);e[r]||(e[r]={}),e[r][i]||(e[r][i]=[]),e[r][i].push({id:t,filename:a,title:s.title||a.replace(`.md`,``),shortAnswer:s.shortAnswer||``,content:c})}}return e}function Ko(){let[e,t]=(0,v.useState)({}),[n,r]=(0,v.useState)(null),[i,a]=(0,v.useState)(null),[o,s]=(0,v.useState)(null);(0,v.useEffect)(()=>{let e=Go();if(t(e),window.innerWidth>768){let t=Object.keys(e);if(t.length>0){let n=t[0],i=Object.keys(e[n]);i.length>0&&(r(n),a(i[0]))}}},[]);let c=(e,t)=>{r(e),a(t),s(null)},l=n&&i?e[n][i]:[],u=`sidebar`;return o?u=`viewer`:n&&i&&(u=`list`),(0,D.jsxs)(`div`,{className:`app-container mobile-view-${u}`,children:[(0,D.jsx)(O,{data:e,selectedTopic:n,selectedSubtopic:i,onSelectSubtopic:c}),(0,D.jsx)(le,{topic:n,subtopic:i,questions:l,selectedQuestion:o,onSelectQuestion:s,onBack:()=>{r(null),a(null)}}),(0,D.jsx)(Ro,{question:o,onBack:()=>s(null)})]})}(0,y.createRoot)(document.getElementById(`root`)).render((0,D.jsx)(v.StrictMode,{children:(0,D.jsx)(Ko,{})}));
+- CGLIB vs. JDK Dynamic Proxies`,Uo=`---
+title: What happens internally when a \`@Transactional\` method is called? Explain the complete execution flow
+shortAnswer: When a \`@Transactional\` method is invoked through a Spring-managed bean, the call first goes through a **Spring AOP proxy** rather than directly to the target object. The proxy delegates the invocation to a **TransactionInterceptor**, which reads the transaction configuration (such as propagation, isolation level, timeout, and rollback rules).
+---
+
+# Spring Transactions
+
+## Interview Question
+
+> **What happens internally when a \`@Transactional\` method is called? Explain the complete execution flow.**
+
+---
+
+# Short Interview Answer (30–60 Seconds)
+
+When a \`@Transactional\` method is invoked through a Spring-managed bean, the call first goes through a **Spring AOP proxy** rather than directly to the target object. The proxy delegates the invocation to a **TransactionInterceptor**, which reads the transaction configuration (such as propagation, isolation level, timeout, and rollback rules).
+
+The interceptor then delegates to the appropriate **PlatformTransactionManager**, which either creates a new transaction or joins an existing one based on the configured propagation. The transaction manager acquires a database connection, disables auto-commit, and binds that connection to the current thread using **TransactionSynchronizationManager** (internally backed by \`ThreadLocal\`).
+
+The business method is then executed, and all database operations within that transaction share the same connection. If the method completes successfully, the transaction is committed. If a rollback-triggering exception occurs, the transaction is rolled back. Finally, Spring releases the database connection and clears the thread-bound transaction resources.
+
+---
+
+# Deep Dive
+
+## Step 1 – Client Calls the Service
+
+Suppose we have the following service:
+
+\`\`\`java
+@Service
+public class UserService {
+
+    @Transactional
+    public void saveUser() {
+        // Business logic
+    }
+}
+\`\`\`
+
+A client calls:
+
+\`\`\`java
+userService.saveUser();
+\`\`\`
+
+Although it appears that the client is calling \`UserService\` directly, Spring actually injects a **proxy object**.
+
+\`\`\`
+Client
+   │
+   ▼
+Spring Proxy
+   │
+   ▼
+Actual UserService
+\`\`\`
+
+The proxy is responsible for handling all cross-cutting concerns such as:
+
+- Transactions
+- Security
+- Logging
+- Caching
+
+without modifying the business logic.
+
+---
+
+## Step 2 – Proxy Intercepts the Method Call
+
+The proxy intercepts the method invocation.
+
+It checks:
+
+- Is the method annotated with \`@Transactional\`?
+- Does the class have \`@Transactional\`?
+- What transaction attributes are configured?
+
+If the method is transactional, the proxy delegates the invocation to Spring's:
+
+\`\`\`
+TransactionInterceptor
+\`\`\`
+
+---
+
+## Step 3 – TransactionInterceptor Reads Transaction Metadata
+
+The \`TransactionInterceptor\` retrieves transaction attributes such as:
+
+- Propagation
+- Isolation Level
+- Timeout
+- Read-only flag
+- Rollback rules
+
+Example:
+
+\`\`\`java
+@Transactional(
+    propagation = Propagation.REQUIRED,
+    isolation = Isolation.READ_COMMITTED,
+    timeout = 30,
+    readOnly = false
+)
+\`\`\`
+
+The interceptor now knows how this transaction should behave.
+
+---
+
+## Step 4 – PlatformTransactionManager Begins the Transaction
+
+The interceptor delegates transaction management to a \`PlatformTransactionManager\`.
+
+Spring chooses the implementation depending on the technology being used.
+
+| Technology | Transaction Manager |
+|------------|---------------------|
+| JDBC | \`DataSourceTransactionManager\` |
+| JPA / Hibernate | \`JpaTransactionManager\` |
+| Distributed Transactions | \`JtaTransactionManager\` |
+
+The transaction manager decides whether to:
+
+- Create a new transaction
+- Join an existing transaction
+- Suspend an existing transaction
+- Throw an exception (depending on propagation)
+
+---
+
+## Step 5 – Acquire a Database Connection
+
+If a new transaction needs to be started:
+
+1. A JDBC connection is obtained from the connection pool.
+2. Auto-commit is disabled.
+3. The transaction officially begins.
+
+Example:
+
+\`\`\`java
+Connection connection = dataSource.getConnection();
+connection.setAutoCommit(false);
+\`\`\`
+
+---
+
+## Step 6 – Bind the Connection to the Current Thread
+
+This is one of Spring's most important internal mechanisms.
+
+Spring stores transaction resources using:
+
+\`\`\`
+TransactionSynchronizationManager
+\`\`\`
+
+Internally, it uses:
+
+\`\`\`
+ThreadLocal
+\`\`\`
+
+This ensures that every repository call made during the transaction uses the **same database connection**.
+
+\`\`\`
+Current Thread
+        │
+        ▼
+ThreadLocal
+        │
+        ▼
+Database Connection
+\`\`\`
+
+Without this mechanism, every repository call could accidentally obtain a different connection, breaking transactional consistency.
+
+---
+
+## Step 7 – Execute Business Logic
+
+Now Spring invokes your actual business method.
+
+\`\`\`java
+@Transactional
+public void transferMoney() {
+
+    accountRepository.debit();
+
+    accountRepository.credit();
+
+}
+\`\`\`
+
+Both repository methods execute using the **same database connection** and participate in the same transaction.
+
+---
+
+## Step 8 – Commit or Rollback
+
+After the business method completes, Spring determines the outcome.
+
+### Success
+
+\`\`\`
+commit()
+\`\`\`
+
+The database permanently persists all changes.
+
+### Failure
+
+If a rollback-triggering exception occurs:
+
+\`\`\`
+rollback()
+\`\`\`
+
+By default, Spring rolls back only for:
+
+- \`RuntimeException\`
+- \`Error\`
+
+Checked exceptions (such as \`IOException\`) do **not** trigger rollback unless explicitly configured.
+
+Example:
+
+\`\`\`java
+@Transactional(rollbackFor = IOException.class)
+\`\`\`
+
+---
+
+## Step 9 – Cleanup
+
+Finally, Spring performs cleanup.
+
+It:
+
+- Commits or rolls back the transaction.
+- Releases the database connection back to the pool.
+- Clears the \`ThreadLocal\`.
+- Removes transaction metadata from \`TransactionSynchronizationManager\`.
+
+This prevents memory leaks and ensures that the next request starts with a clean transaction context.
+
+---
+
+# Complete Execution Flow
+
+\`\`\`
+Client
+   │
+   ▼
+Spring AOP Proxy
+   │
+   ▼
+TransactionInterceptor
+   │
+   ▼
+Read Transaction Metadata
+   │
+   ▼
+PlatformTransactionManager
+   │
+   ▼
+Acquire Database Connection
+   │
+   ▼
+Disable Auto Commit
+   │
+   ▼
+Bind Connection to Current Thread
+(ThreadLocal via TransactionSynchronizationManager)
+   │
+   ▼
+Execute Business Method
+   │
+   ├──────────────► Success
+   │                   │
+   │                   ▼
+   │                Commit
+   │
+   └──────────────► Exception
+                       │
+                       ▼
+                    Rollback
+                       │
+                       ▼
+Release Connection
+                       │
+                       ▼
+Clear ThreadLocal
+\`\`\`
+
+---
+
+# Architecture Perspective
+
+A Software Architect thinks beyond annotations and focuses on transaction boundaries and system behavior.
+
+Key considerations include:
+
+- Keep transaction boundaries at the **service layer**, representing a complete business operation.
+- Avoid long-running transactions.
+- Never perform slow external calls (HTTP, SMTP, Kafka, payment gateways) inside a database transaction.
+- Understand how proxy-based transaction management affects class design (e.g., self-invocation limitations).
+- Consider connection pool usage, lock duration, and transaction timeouts under load.
+- In distributed systems, prefer patterns like the **Outbox Pattern** and **Saga Pattern** over XA/2PC transactions.
+
+---
+
+# Real Production Example
+
+## Scenario
+
+An e-commerce application processes an order.
+
+Steps:
+
+1. Save the order.
+2. Reserve inventory.
+3. Send an email confirmation.
+
+### ❌ Incorrect Design
+
+\`\`\`java
+@Transactional
+public void placeOrder() {
+
+    orderRepository.save(order);
+
+    inventoryRepository.reserve(order);
+
+    emailService.sendConfirmation(order);
+
+}
+\`\`\`
+
+If the SMTP server is slow or unavailable:
+
+- The database transaction remains open.
+- Database locks are held longer.
+- Connection pool resources are occupied.
+- Overall throughput decreases.
+
+### ✅ Better Design
+
+\`\`\`java
+@Transactional
+public void placeOrder() {
+
+    orderRepository.save(order);
+
+    inventoryRepository.reserve(order);
+
+    eventPublisher.publish(new OrderPlacedEvent(order));
+
+}
+\`\`\`
+
+After the transaction commits:
+
+- Publish an event.
+- Send the email asynchronously.
+- Keep the database transaction short and efficient.
+
+---
+
+# Common Follow-up Interview Questions
+
+1. Why does Spring use proxies for transaction management?
+2. What is \`TransactionInterceptor\`?
+3. What is \`PlatformTransactionManager\`?
+4. What is \`TransactionSynchronizationManager\`?
+5. Why does Spring use \`ThreadLocal\`?
+6. Why doesn't \`@Transactional\` work on private methods?
+7. Why does self-invocation bypass transactions?
+8. How does Spring choose between JDK Dynamic Proxy and CGLIB?
+9. What happens if a transaction timeout occurs?
+10. What happens if an exception is caught inside a transactional method?
+11. What happens if a transaction method calls another transactional method?
+12. How does propagation affect transaction creation?
+13. How does \`JpaTransactionManager\` differ from \`DataSourceTransactionManager\`?
+14. When is the SQL actually sent to the database—during \`flush()\` or \`commit()\`?
+15. How does Spring manage nested transactions?
+
+---
+
+# Common Interview Traps
+
+### ❌ "\`@Transactional\` starts the transaction."
+
+Incorrect.
+
+The **proxy** intercepts the method call, and the **TransactionInterceptor** delegates to the **PlatformTransactionManager**, which manages the transaction lifecycle.
+
+---
+
+### ❌ Every \`@Transactional\` method creates a new transaction.
+
+Incorrect.
+
+The behavior depends on the configured **Propagation**. The default (\`REQUIRED\`) joins an existing transaction if one exists.
+
+---
+
+### ❌ Every repository call gets a new database connection.
+
+Incorrect.
+
+Within a transaction, all repository operations share the same connection because it is bound to the current thread.
+
+---
+
+### ❌ Checked exceptions always trigger rollback.
+
+Incorrect.
+
+Spring rolls back only on unchecked exceptions by default.
+
+---
+
+# Frequently Asked Variations
+
+Interviewers may ask the same concept in different ways.
+
+Examples:
+
+- What happens when a transactional method is invoked?
+- Explain Spring transaction management internally.
+- How does Spring AOP enable transactions?
+- What role does \`PlatformTransactionManager\` play?
+- Why doesn't \`@Transactional\` work on private methods?
+- Why does self-invocation bypass transaction management?
+- How is the database connection managed inside a transaction?
+- Why is \`ThreadLocal\` used in transaction management?
+
+---
+
+# Key Revision Notes (1 Minute)
+
+- \`@Transactional\` works through **Spring AOP proxies**.
+- The proxy delegates to **TransactionInterceptor**.
+- \`TransactionInterceptor\` reads transaction metadata.
+- \`PlatformTransactionManager\` manages transaction creation and completion.
+- A database connection is acquired from the connection pool.
+- Auto-commit is disabled.
+- The connection is stored in **TransactionSynchronizationManager** using \`ThreadLocal\`.
+- All repository operations share the same connection.
+- On success → **Commit**.
+- On rollback-triggering exception → **Rollback**.
+- Spring releases the connection and clears the thread-bound resources.
+
+---
+
+# Important Internal Classes
+
+| Class | Responsibility |
+|------|----------------|
+| \`TransactionInterceptor\` | Intercepts transactional method calls |
+| \`PlatformTransactionManager\` | Starts, commits, rolls back transactions |
+| \`TransactionSynchronizationManager\` | Binds transaction resources to the current thread |
+| \`DataSourceTransactionManager\` | Transaction manager for plain JDBC |
+| \`JpaTransactionManager\` | Transaction manager for JPA/Hibernate |
+| \`ThreadLocal\` | Stores transaction resources per thread |
+
+---
+
+# Performance Considerations
+
+- Keep transactions as short as possible.
+- Avoid network calls inside transactions.
+- Long transactions increase lock contention.
+- Long transactions consume database connections longer.
+- Excessive transaction duration reduces application throughput.
+- Use appropriate propagation and isolation levels based on business requirements.
+
+---
+
+# Senior Engineer Insights
+
+Experienced engineers understand that \`@Transactional\` is only a declarative abstraction.
+
+The real transaction lifecycle is managed by:
+
+- Spring AOP
+- Proxies
+- TransactionInterceptor
+- PlatformTransactionManager
+- JDBC Connections
+- TransactionSynchronizationManager
+- ThreadLocal
+
+Knowing these internals helps debug issues such as:
+
+- Self-invocation problems
+- Transactions not being created
+- Unexpected rollbacks
+- Connection leaks
+- Deadlocks
+- Transaction propagation issues
+
+---
+
+# Interview Difficulty
+
+**Difficulty:** ⭐⭐⭐⭐☆ (Hard)
+
+This is a favorite question for senior backend interviews because it tests both framework knowledge and understanding of transaction internals.
+
+---
+
+# Related Topics to Study Next
+
+- Transaction Propagation
+- Transaction Isolation Levels
+- Rollback Rules
+- Self-Invocation Problem
+- Spring AOP Internals
+- JDK Dynamic Proxy vs CGLIB
+- \`flush()\` vs \`commit()\`
+- \`TransactionSynchronizationManager\`
+- Optimistic vs Pessimistic Locking
+- Outbox Pattern
+- Saga Pattern
+- Distributed Transactions
+- \`TransactionTemplate\``,Wo=`---
+title: In Spring, if a class has a public non-transactional method \`register()\` that internally calls a public \`@Transactional\` method \`save()\` within the exact same class, why does the transaction fail to start? Explain the internal mechanics of why this happens and provide at least three architectural approaches to fix it in a production environment.
+shortAnswer: This issue occurs due to Spring's Aspect-Oriented Programming (AOP) proxy mechanism, commonly referred to as the "self-invocation" or "local call" trap.
+---
+
+# Why Doesn't \`@Transactional\` Work on Self-Invocation?
+
+---
+
+# 1. Interview Question
+
+**Why doesn't \`@Transactional\` work when a method inside the same class calls another \`@Transactional\` method? Explain exactly why. How would you fix it? Give at least three different solutions.**
+
+---
+
+# 2. Short Interview Answer (30–60 seconds)
+
+The reason this doesn't work is that Spring's \`@Transactional\` is implemented using **AOP proxies**. When another bean calls a transactional method, the call first goes through the proxy, which starts, commits, or rolls back the transaction before invoking the target object.
+
+However, in your example, \`register()\` and \`save()\` belong to the **same object**. The call \`save()\` is a **self-invocation**, meaning it is a direct Java method call (\`this.save()\`) rather than a call through the Spring proxy. Since the proxy is bypassed, Spring never gets the opportunity to execute \`TransactionInterceptor\`, so the \`@Transactional\` annotation is effectively ignored.
+
+This is one of the most common Spring interview questions because it tests whether you understand **how Spring AOP works internally**, not just how to use annotations.
+
+Typical solutions include:
+
+- Moving the transactional method into another Spring bean.
+- Calling the method through the Spring proxy instead of \`this\`.
+- Using AspectJ weaving instead of proxy-based AOP.
+
+The first option—moving the transactional logic into another bean—is generally considered the cleanest and most maintainable approach.
+
+---
+
+# 3. Deep Dive Explanation
+
+## The Important Thing to Understand
+
+Many developers think:
+
+> "I added \`@Transactional\`, so Spring will automatically wrap this method."
+
+That's **not** what actually happens.
+
+Spring **does not modify your class directly**.
+
+Instead, it creates a **proxy object**.
+
+\`\`\`text
+Caller
+   │
+   ▼
+Spring Proxy
+   │
+   ▼
+Real UserService
+\`\`\`
+
+The proxy contains all the transaction logic.
+
+---
+
+## What Actually Gets Registered?
+
+Suppose we have:
+
+\`\`\`java
+@Service
+public class UserService {
+
+    @Transactional
+    public void save() {}
+
+    public void register() {
+        save();
+    }
+}
+\`\`\`
+
+Spring creates something conceptually similar to:
+
+\`\`\`text
+UserServiceProxy
+        │
+        ▼
+Real UserService
+\`\`\`
+
+The proxy wraps the transactional methods.
+
+Pseudo-code:
+
+\`\`\`java
+class UserServiceProxy extends UserService {
+
+    @Override
+    public void save() {
+
+        transactionManager.begin();
+
+        try {
+            super.save();
+            transactionManager.commit();
+        }
+        catch (Exception e) {
+            transactionManager.rollback();
+            throw e;
+        }
+    }
+}
+\`\`\`
+
+The actual generated proxy is much more sophisticated, but conceptually this is what happens.
+
+---
+
+## External Call
+
+\`\`\`text
+Controller
+    │
+    ▼
+UserService Proxy
+    │
+TransactionInterceptor
+    │
+begin transaction
+    │
+Real UserService.save()
+    │
+commit
+\`\`\`
+
+Everything works.
+
+---
+
+## Internal Call
+
+Now suppose:
+
+\`\`\`java
+public void register() {
+    save();
+}
+\`\`\`
+
+Execution:
+
+\`\`\`text
+Controller
+    │
+    ▼
+Proxy.register()
+    │
+Real UserService.register()
+    │
+this.save()
+\`\`\`
+
+Notice something?
+
+The call never goes back to the proxy.
+
+It stays inside the object.
+
+Therefore:
+
+\`\`\`text
+TransactionInterceptor
+
+NEVER EXECUTES
+\`\`\`
+
+The annotation is completely bypassed.
+
+---
+
+## What Java Actually Does
+
+Inside an instance method:
+
+\`\`\`java
+save();
+\`\`\`
+
+is equivalent to:
+
+\`\`\`java
+this.save();
+\`\`\`
+
+\`this\` is **not** the proxy.
+
+It is the actual target object.
+
+So Java performs a normal virtual method invocation.
+
+Spring never sees it.
+
+---
+
+## Why Doesn't Spring Intercept It?
+
+Because Spring AOP is **proxy-based**, not bytecode-modification based.
+
+A proxy can only intercept calls that **pass through the proxy**.
+
+It cannot intercept:
+
+\`\`\`java
+this.method();
+\`\`\`
+
+because the object already has control.
+
+---
+
+## Proxy vs Self Invocation
+
+### ✅ Works
+
+\`\`\`text
+Controller
+        │
+        ▼
+Spring Proxy
+        │
+        ▼
+save()
+\`\`\`
+
+---
+
+### ❌ Doesn't Work
+
+\`\`\`text
+register()
+      │
+      ▼
+this.save()
+\`\`\`
+
+No proxy.
+
+No interceptor.
+
+No transaction.
+
+---
+
+## What If \`register()\` Is Also Transactional?
+
+Example:
+
+\`\`\`java
+@Transactional
+public void register() {
+    save();
+}
+\`\`\`
+
+Then:
+
+\`\`\`text
+register()
+\`\`\`
+
+starts the transaction.
+
+Since a transaction already exists:
+
+\`\`\`text
+save()
+\`\`\`
+
+executes inside the same transaction.
+
+This often confuses developers.
+
+The annotation on \`save()\` still isn't applied—it just happens to run within the transaction started by \`register()\`.
+
+---
+
+## Why Does \`REQUIRES_NEW\` Fail?
+
+Suppose:
+
+\`\`\`java
+@Transactional
+public void register() {
+    save();
+}
+
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void save() {}
+\`\`\`
+
+Expected:
+
+\`\`\`text
+Tx A
+
+↓
+
+Suspend
+
+↓
+
+Tx B
+
+↓
+
+Resume Tx A
+\`\`\`
+
+Actual:
+
+\`\`\`text
+Tx A
+
+↓
+
+Direct Java call
+
+↓
+
+Still Tx A
+\`\`\`
+
+Because Spring never sees \`save()\`.
+
+Therefore propagation settings are ignored.
+
+---
+
+# 4. Step-by-Step Execution Flow
+
+## Case 1 — External Call (Works)
+
+\`\`\`text
+Client
+   │
+   ▼
+Controller
+   │
+   ▼
+Spring Proxy
+   │
+   ▼
+TransactionInterceptor
+   │
+   ▼
+PlatformTransactionManager.getTransaction()
+   │
+   ▼
+Hibernate Session created / reused
+   │
+   ▼
+Real save()
+   │
+   ▼
+flush()
+   │
+   ▼
+commit()
+   │
+   ▼
+Connection returned to pool
+\`\`\`
+
+---
+
+## Case 2 — Self Invocation (Fails)
+
+\`\`\`text
+Client
+   │
+   ▼
+Controller
+   │
+   ▼
+Spring Proxy
+   │
+   ▼
+register()
+   │
+   ▼
+this.save()
+   │
+   ▼
+Direct Java call
+   │
+   ▼
+No TransactionInterceptor
+   │
+   ▼
+No new transaction started
+\`\`\`
+
+---
+
+# 5. Architecture Perspective
+
+A Staff Engineer doesn't just think "How do I make this work?" but "How should transactional boundaries be designed?"
+
+### Scalability
+
+Keep transactions as short as possible to reduce lock contention and improve throughput.
+
+### Maintainability
+
+Separate orchestration from transactional work. A service coordinating multiple operations should delegate transactional units to dedicated services.
+
+### Reliability
+
+Avoid hidden behavior. Self-invocation can lead to subtle bugs where developers believe propagation or rollback rules are being applied when they are not.
+
+### Distributed Systems
+
+If \`register()\` also sends Kafka messages, emails, or invokes remote services, consider patterns like the **Transactional Outbox Pattern** instead of wrapping everything in one database transaction.
+
+### Trade-offs
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| Separate Service | Clean, testable, explicit | More beans |
+| Self Proxy Injection | Minimal refactor | Circular dependency risk |
+| \`AopContext.currentProxy()\` | Works | Couples code to Spring AOP |
+| AspectJ Weaving | Handles self-invocation | More complex setup |
+
+---
+
+# 6. Real Production Example
+
+## Problem
+
+An e-commerce application processes an order:
+
+- Validate order
+- Save order
+- Reserve inventory
+- Audit the operation
+
+Developers wanted inventory reservation to run in a separate transaction:
+
+\`\`\`java
+@Transactional
+public void placeOrder() {
+    reserveInventory(); // expected REQUIRES_NEW
+}
+
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void reserveInventory() {}
+\`\`\`
+
+### Issue
+
+\`reserveInventory()\` was in the same class.
+
+The call bypassed the proxy.
+
+\`REQUIRES_NEW\` never started.
+
+Inventory reservation ran inside the original transaction, causing unexpected rollbacks.
+
+### Solution
+
+Move inventory reservation into another Spring bean:
+
+\`\`\`java
+@Service
+public class InventoryService {
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reserveInventory() {
+        // reserve stock
+    }
+}
+\`\`\`
+
+Now:
+
+\`\`\`java
+inventoryService.reserveInventory();
+\`\`\`
+
+goes through the proxy and correctly starts a new transaction.
+
+---
+
+# 7. Common Follow-up Interview Questions
+
+| Question | Brief Answer |
+|----------|--------------|
+| Why does \`@Transactional\` use proxies? | To apply cross-cutting concerns without modifying business code. |
+| Does this affect \`@Cacheable\`? | Yes. Same proxy limitation. |
+| Does this affect \`@Async\`? | Yes. Same proxy limitation. |
+| Does this affect \`@Retryable\`? | Yes. Same proxy limitation. |
+| What is self-invocation? | Calling another method on the same object (\`this.method()\`). |
+| Why doesn't \`REQUIRES_NEW\` work? | The proxy is bypassed. |
+| Does it affect private methods? | Yes. Private methods cannot be advised by proxy-based AOP. |
+| What if another bean calls it? | It goes through the proxy and transactions work. |
+| Can CGLIB solve this? | No. Self-invocation still bypasses the proxy. |
+| How does AspectJ differ? | AspectJ weaves code into the class itself. |
+| How do you verify proxying? | Use \`AopUtils.isAopProxy(bean)\`. |
+| What if \`register()\` is transactional? | \`save()\` executes in the existing transaction. |
+
+---
+
+# 8. Interview Traps
+
+Common misconceptions:
+
+- Thinking \`@Transactional\` modifies bytecode.
+- Believing every annotated method automatically starts a transaction.
+- Assuming \`this.save()\` goes through Spring.
+- Expecting \`REQUIRES_NEW\` to work on self-invocation.
+- Believing CGLIB fixes self-invocation.
+- Forgetting that \`@Async\`, \`@Cacheable\`, and \`@Retryable\` have the same limitation.
+
+Interviewers expect you to explain **why** the proxy is bypassed.
+
+---
+
+# 9. Frequently Asked Variations
+
+Instead of asking:
+
+> Why doesn't \`@Transactional\` work?
+
+They may ask:
+
+- Why doesn't transaction propagation work?
+- Why is \`REQUIRES_NEW\` ignored?
+- Why doesn't rollback happen?
+- Why are two methods sharing one transaction?
+- Why doesn't \`@Transactional\` work on private methods?
+- What is self-invocation?
+- Why does moving the method to another service fix the issue?
+- What's the difference between Spring AOP and AspectJ?
+- Why do \`@Async\` and \`@Cacheable\` have the same limitation?
+
+---
+
+# 10. Key Revision Notes
+
+- \`@Transactional\` uses Spring AOP proxies.
+- Only calls through the proxy are intercepted.
+- \`this.method()\` bypasses the proxy.
+- Self-invocation skips transaction interception.
+- \`REQUIRES_NEW\` is ignored on self-invocation.
+- If the outer method is transactional, the inner method still executes inside that transaction.
+- Preferred fix: move the transactional method into another bean.
+
+---
+
+# 11. Whiteboard / Diagram
+
+## External Call (Works)
+
+\`\`\`text
+Controller
+    │
+    ▼
++-----------------------+
+| Spring Proxy          |
++-----------------------+
+    │
+    ▼
+TransactionInterceptor
+    │
+    ▼
+PlatformTransactionManager
+    │
+    ▼
+Real UserService.save()
+    │
+    ▼
+Database
+\`\`\`
+
+---
+
+## Self Invocation (Fails)
+
+\`\`\`text
+Controller
+    │
+    ▼
++-----------------------+
+| Spring Proxy          |
++-----------------------+
+    │
+    ▼
+register()
+    │
+    ▼
+this.save()
+    │
+    ▼
+Real save()
+
+(TransactionInterceptor is bypassed)
+\`\`\`
+
+---
+
+# 12. Code Examples
+
+## Solution 1 — Move to Another Bean (Recommended)
+
+\`\`\`java
+@Service
+public class UserService {
+
+    private final UserTransactionService txService;
+
+    public UserService(UserTransactionService txService) {
+        this.txService = txService;
+    }
+
+    public void register() {
+        txService.save();
+    }
+}
+
+@Service
+public class UserTransactionService {
+
+    @Transactional
+    public void save() {
+        // persist user
+    }
+}
+\`\`\`
+
+**Why it works**
+
+The call crosses bean boundaries and goes through the Spring proxy.
+
+---
+
+## Solution 2 — Inject the Proxy of the Same Bean
+
+\`\`\`java
+@Service
+public class UserService {
+
+    @Lazy
+    @Autowired
+    private UserService self;
+
+    public void register() {
+        self.save();
+    }
+
+    @Transactional
+    public void save() {
+        // persist user
+    }
+}
+\`\`\`
+
+**Why it works**
+
+\`self\` is the proxied bean managed by Spring.
+
+---
+
+## Solution 3 — Use \`AopContext.currentProxy()\`
+
+\`\`\`java
+@EnableAspectJAutoProxy(exposeProxy = true)
+@Configuration
+class AppConfig {}
+
+@Service
+public class UserService {
+
+    public void register() {
+        ((UserService) AopContext.currentProxy()).save();
+    }
+
+    @Transactional
+    public void save() {}
+}
+\`\`\`
+
+**Why it works**
+
+Retrieves the current Spring proxy.
+
+---
+
+## Solution 4 — Use AspectJ Weaving
+
+\`\`\`java
+@Service
+public class UserService {
+
+    public void register() {
+        save();
+    }
+
+    @Transactional
+    public void save() {
+        // persist user
+    }
+}
+\`\`\`
+
+With AspectJ, transaction advice is woven into the class itself.
+
+Self-invocation works correctly.
+
+---
+
+# 13. Internal APIs / Classes
+
+| Class | Purpose |
+|--------|---------|
+| \`TransactionInterceptor\` | Applies transaction advice around method execution |
+| \`TransactionAspectSupport\` | Core transaction workflow |
+| \`PlatformTransactionManager\` | Transaction management strategy |
+| \`AbstractPlatformTransactionManager\` | Common transaction lifecycle implementation |
+| \`DataSourceTransactionManager\` | JDBC transaction manager |
+| \`JpaTransactionManager\` | JPA transaction manager |
+| \`ProxyFactory\` | Creates AOP proxies |
+| \`JdkDynamicAopProxy\` | Interface-based proxy |
+| \`CglibAopProxy\` | Class-based proxy |
+| \`BeanPostProcessor\` | Wraps beans with proxies during bean creation |
+
+---
+
+# 14. Performance Considerations
+
+- **Time Complexity:** O(1) proxy overhead per method call.
+- **Memory Usage:** Small overhead for proxy objects.
+- **CPU Impact:** Minimal compared to database I/O.
+- **Locking:** Longer transactions increase lock contention.
+- **Database Performance:** Keep transactions short.
+- **Network Implications:** Avoid remote calls inside long-running transactions.
+
+---
+
+# 15. Senior Engineer Insights
+
+- Treat transaction boundaries as architectural boundaries.
+- Keep transactions short and cohesive.
+- Separate orchestration logic from transactional logic.
+- Remember that \`@Async\`, \`@Cacheable\`, and \`@Retryable\` have the same proxy limitation.
+- Prefer explicit service boundaries over framework tricks.
+- When debugging, first verify whether the method call actually passed through the Spring proxy.
+
+---
+
+# 16. Interview Difficulty
+
+**Difficulty:** ⭐⭐⭐☆☆ (Medium)
+
+### Why?
+
+Most developers know the rule.
+
+Few can explain **why** it happens internally.
+
+Senior engineers should understand:
+
+- Proxy creation
+- Interceptor chain
+- Transaction lifecycle
+- Self-invocation
+- Propagation behavior
+
+---
+
+# 17. Related Topics
+
+## Must Know
+
+- Spring AOP
+- JDK Proxy vs CGLIB
+- Transaction Propagation
+- Transaction Isolation
+- Rollback Rules
+- \`PlatformTransactionManager\`
+
+---
+
+## Good to Know
+
+- \`@Async\`
+- \`@Cacheable\`
+- \`@Retryable\`
+- Bean Lifecycle
+- \`BeanPostProcessor\`
+
+---
+
+## Advanced
+
+- AspectJ Weaving
+- Nested Transactions
+- Savepoints
+- Reactive Transactions
+- \`TransactionSynchronizationManager\`
+- Saga Pattern
+- Transactional Outbox Pattern
+`;function Go(e){let t=/^---\s*[\r\n]+([\s\S]*?)[\r\n]+---\s*[\r\n]+([\s\S]*)$/.exec(e);if(t){let e=t[1],n=t[2].trim(),r={};return e.split(`
+`).forEach(e=>{let t=e.indexOf(`:`);if(t>-1){let n=e.slice(0,t).trim(),i=e.slice(t+1).trim();r[n]=i}}),{data:r,content:n}}return{data:{},content:e}}var Ko=Object.assign({"../data/Java/Collections/q1.md":zo,"../data/SpringBoot/AOP/q1.md":Bo,"../data/SpringBoot/Transactions/q1.md":Vo,"../data/SpringBoot/Transactions/q2.md":Ho,"../data/SpringBoot/Transactions/q3.md":Uo,"../data/SpringBoot/Transactions/q4.md":Wo});function qo(){let e={};for(let t in Ko){let n=t.replace(`../data/`,``).split(`/`);if(n.length>=3){let r=n[0],i=n[1],a=n[2],o=Ko[t],{data:s,content:c}=Go(o);e[r]||(e[r]={}),e[r][i]||(e[r][i]=[]),e[r][i].push({id:t,filename:a,title:s.title||a.replace(`.md`,``),shortAnswer:s.shortAnswer||``,content:c})}}return e}function Jo(){let[e,t]=(0,v.useState)({}),[n,r]=(0,v.useState)(null),[i,a]=(0,v.useState)(null),[o,s]=(0,v.useState)(null);(0,v.useEffect)(()=>{let e=qo();if(t(e),window.innerWidth>768){let t=Object.keys(e);if(t.length>0){let n=t[0],i=Object.keys(e[n]);i.length>0&&(r(n),a(i[0]))}}},[]);let c=(e,t)=>{r(e),a(t),s(null)},l=n&&i?e[n][i]:[],u=`sidebar`;return o?u=`viewer`:n&&i&&(u=`list`),(0,D.jsxs)(`div`,{className:`app-container mobile-view-${u}`,children:[(0,D.jsx)(O,{data:e,selectedTopic:n,selectedSubtopic:i,onSelectSubtopic:c}),(0,D.jsx)(le,{topic:n,subtopic:i,questions:l,selectedQuestion:o,onSelectQuestion:s,onBack:()=>{r(null),a(null)}}),(0,D.jsx)(Ro,{question:o,onBack:()=>s(null)})]})}(0,y.createRoot)(document.getElementById(`root`)).render((0,D.jsx)(v.StrictMode,{children:(0,D.jsx)(Jo,{})}));
